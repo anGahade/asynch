@@ -1,38 +1,46 @@
 """
-Завдання:
-Вам потрібно створити Python скрипт, який використовує многопоточність для пошуку файлів з конкретним розширенням
-(наприклад, .txt або .jpg) в різних папках на вашому комп'ютері.
+Створити асинхронний Python скрипт,
+який здійснює скрапінг веб-сайтів для пошуку конкретного ключового слова на них.
+Скрипт повинен одночасно звертатися до декількох веб-сайтів.
 
 Вимоги:
-1. Скрипт повинен приймати розширення файлу та список директорій для пошуку як вхідні параметри.
-2. Скрипт повинен використовувати багатопотоковість для одночасного пошуку в різних директоріях.
-3. Знайдені файли повинні виводитися на екран з інформацією про те, в якій папці вони були знайдені.
+1. Скрипт повинен приймати список URL і ключове слово для пошуку.
+2. Скрипт повинен асинхронно завантажувати вміст кожної веб-сторінки і шукати на ній задане ключове слово.
+3. Результат (знайдено/не знайдено) повинен виводитись на екран для кожного URL.
 """
 
-import os
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+import aiohttp
+from bs4 import BeautifulSoup
 
 
-def search_files(extension, directory):
-    found_files = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith(extension):
-                found_files.append(os.path.join(root, file))
-    return found_files
+async def fetch(url, session):
+    async with session.get(url) as response:
+        return await response.text()
 
 
-def main(extension, directories):
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(search_files, [extension] * len(directories), directories))
-    for directory, files in zip(directories, results):
-        print(f"Знайдено файли в папці {directory}:")
-        for file in files:
-            print(file)
+async def search_keyword(url, keyword, session):
+    content = await fetch(url, session)
+    soup = BeautifulSoup(content, 'html.parser')
 
+    if keyword.lower() in soup.get_text().lower():
+        print(f"Ключове слово '{keyword}' знайдено на веб-сайті {url}")
+    else:
+        print(f"Ключове слово '{keyword}' не знайдено на веб-сайті {url}")
+
+
+async def main(urls, keyword):
+    async with aiohttp.ClientSession() as session:
+        tasks = [search_keyword(url, keyword, session) for url in urls]
+        await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
-    target_extension = input("Введіть розширення файлів (наприклад, .txt): ")
-    target_directories = input("Введіть список директорій (розділіть їх комами): ").split(',')
 
-    main(target_extension, target_directories)
+    target_urls = [
+        "https://uk.wikipedia.org/wiki/%D0%A3%D0%BA%D1%80%D0%B0%D1%97%D0%BD%D0%B0",
+        "https://uk.wikipedia.org/wiki/%D0%9F%D1%80%D0%B5%D0%B7%D0%B8%D0%B4%D0%B5%D0%BD%D1%82_%D0%A3%D0%BA%D1%80%D0%B0%D1%97%D0%BD%D0%B8",
+        "https://uk.wikipedia.org/wiki/%D0%9F%D0%BE%D1%80%D0%BE%D1%88%D0%B5%D0%BD%D0%BA%D0%BE_%D0%9F%D0%B5%D1%82%D1%80%D0%BE_%D0%9E%D0%BB%D0%B5%D0%BA%D1%81%D1%96%D0%B9%D0%BE%D0%B2%D0%B8%D1%87",
+    ]
+    target_keyword = input("Введіть ключове слово для пошуку: ")
+
+    asyncio.run(main(target_urls, target_keyword))
